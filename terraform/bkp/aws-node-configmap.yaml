@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aws-node
+  namespace: kube-system
+data:
+  mtu: "9001"
+  pluginLogFile: "/host/var/log/aws-routed-eni/plugin.log"
+  pluginLogLevel: "Debug"
+  vethPrefix: "eni"
+  disableTCPEarlyDemux: "false"

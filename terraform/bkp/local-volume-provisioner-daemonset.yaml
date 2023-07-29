@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: local-volume-provisioner
+  labels:
+    app: local-volume-provisioner
+spec:
+  selector:
+    matchLabels:
+      app: local-volume-provisioner
+  template:
+    metadata:
+      labels:
+        app: local-volume-provisioner
+    spec:
+      serviceAccountName: local-storage-admin
+      containers:
+        - name: provisioner
+          image: quay.io/external_storage/local-volume-provisioner:v2.3.4
+          args: ["-v=5"]
+          env:
+           - name: MY_NODE_NAME
+             valueFrom:
+               fieldRef:
+                 fieldPath: spec.nodeName
+          volumeMounts:
+            - mountPath: /etc/provisioner/config 
+              name: provisioner-config
+            - mountPath: /mnt/local-storage
+              name: local-storage
+      volumes:
+        - name: provisioner-config
+          configMap:
+            name: local-provisioner-config
+        - name: local-storage
+          hostPath:
+            path: /mnt/local-storage
+

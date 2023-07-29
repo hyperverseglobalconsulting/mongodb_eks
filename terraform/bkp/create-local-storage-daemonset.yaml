@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: mongodb-volume-setup
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      name: mongodb-volume-setup
+  template:
+    metadata:
+      labels:
+        name: mongodb-volume-setup
+    spec:
+      hostPID: true
+      containers:
+      - name: volume-manager
+        image: 093487613626.dkr.ecr.us-east-2.amazonaws.com/mongodb-volume-setup:latest
+        securityContext:
+          privileged: true
+        env:
+        - name: AWS_DEFAULT_REGION
+          value: "us-east-2"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: secret-access-key
+        volumeMounts:
+        - name: ebs-volume
+          mountPath: /disks/local-provisioner/mongodb
+      volumes:
+      - name: ebs-volume
+        hostPath:
+          path: /disks/local-provisioner/mongodb
+          type: DirectoryOrCreate
+

@@ -1,0 +1,4 @@
+mongodb:
+  persistence:
+    enabled: true
+    storageClass: "ebs-sc"

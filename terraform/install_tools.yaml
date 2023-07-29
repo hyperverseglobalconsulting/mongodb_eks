@@ -1,0 +1,246 @@
+---
+- name: Setup Kubernetes Tools
+  hosts: all
+  become: yes
+  vars:
+    cluster_arn: "{{ EKS_CLUSTER_ARN }}"
+    aws_access_key_id: "{{ AWS_ACCESS_KEY_ID }}"
+    aws_secret_access_key: "{{ AWS_SECRET_ACCESS_KEY }}"
+    aws_region: "{{ AWS_REGION }}"
+    key_name: "{{KEY_NAME}}"
+
+  tasks:
+    - name: Install required packages
+      yum:
+        name:
+          - unzip
+          - git
+          - docker
+        state: latest
+
+    - name: Install kubectl
+      get_url:
+        url: "https://s3.us-west-2.amazonaws.com/amazon-eks/1.26.4/2023-05-11/bin/linux/amd64/kubectl"
+        dest: "/usr/local/bin/kubectl"
+        mode: '0755'
+
+    - name: Install aws-iam-authenticator
+      get_url:
+        url: "https://amazon-eks.s3.us-west-2.amazonaws.com/1.26.4/2023-05-11/bin/linux/amd64/aws-iam-authenticator"
+        dest: "/usr/local/bin/aws-iam-authenticator"
+        mode: '0755'
+
+    - name: Install eksctl
+      block:
+        - name: Get OS name
+          command: uname -s
+          register: os_name
+          changed_when: false
+        - name: Download eksctl
+          get_url:
+            url: "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_{{ os_name.stdout }}_amd64.tar.gz"
+            dest: "/tmp/eksctl.tar.gz"
+            validate_certs: no
+        - name: Extract eksctl
+          unarchive:
+            src: "/tmp/eksctl.tar.gz"
+            dest: "/usr/local/bin/"
+            remote_src: yes
+
+    - name: Download AWS CLI v2
+      get_url:
+        url: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+        dest: "/tmp/awscliv2.zip"
+      become: no
+
+    - name: Unzip AWS CLI v2 package
+      unarchive:
+        src: "/tmp/awscliv2.zip"
+        dest: "/tmp/"
+        remote_src: yes
+      become: no
+
+    - name: Install AWS CLI v2
+      command: "/tmp/aws/install"
+
+    - name: Install Helm
+      block:
+        - name: Download Helm
+          get_url:
+            url: "https://get.helm.sh/helm-v3.7.0-linux-amd64.tar.gz"
+            dest: "/tmp/helm.tar.gz"
+        - name: Extract Helm
+          unarchive:
+            src: "/tmp/helm.tar.gz"
+            dest: "/tmp/"
+            remote_src: yes
+        - name: Move Helm to bin directory
+          command: mv /tmp/linux-amd64/helm /usr/local/bin/helm
+
+    - name: Add Helm stable repository
+      command:
+        cmd: "helm repo add stable https://charts.helm.sh/stable"
+      become: no
+
+    - name: Update Helm repositories
+      command:
+        cmd: "helm repo update"
+      become: no
+
+    - name: Configure AWS settings
+      command:
+        cmd: "aws configure set {{ item.name }} {{ item.value }}"
+      loop:
+        - { name: 'aws_access_key_id', value: '{{ aws_access_key_id }}' }
+        - { name: 'aws_secret_access_key', value: '{{ aws_secret_access_key }}' }
+        - { name: 'region', value: '{{ aws_region }}' }
+      become: no
+
+    - name: Update kubeconfig
+      command:
+        cmd: "aws eks update-kubeconfig --region {{ aws_region }} --name {{ cluster_arn.split('/')[-1] }}"
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ aws_access_key_id }}"
+        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_access_key }}"
+        AWS_DEFAULT_REGION: "{{ aws_region }}"
+      become: no
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add ec2-user to docker group
+      user:
+        name: ec2-user
+        groups: docker
+        append: yes
+
+    - name: Update all packages
+      yum:
+        name: '*'
+        state: latest
+      become: yes
+
+    - name: Copy files to remote server's /tmp directory
+      copy:
+        src: "{{ item }}"
+        dest: "/tmp/{{ item }}"
+      with_items:
+        - ebs-pvc.yaml
+        - ebs-storage-class.yaml
+        - storageclass-custom-values.yaml
+        - mongodb_sanity_test.py
+        - requirements.txt
+      become: no
+
+    - name: Delete local-storage related resources if they exist
+      command: kubectl delete -f {{ item }}
+      with_items:
+        - /tmp/ebs-pvc.yaml
+        - /tmp/ebs-storage-class.yaml
+      ignore_errors: yes
+      become: no
+
+    - name: Apply local-storage resources and ServiceAccount
+      command: kubectl apply -f {{ item }}
+      with_items:
+        - /tmp/ebs-pvc.yaml
+        - /tmp/ebs-storage-class.yaml
+      become: no
+
+    - name: Add EKS Helm Repository
+      command:
+        cmd: "helm repo add eks https://aws.github.io/eks-charts"
+      become: no
+
+    - name: Update Helm Repositories
+      command:
+        cmd: "helm repo update"
+      become: no
+
+    - name: Install AWS EBS CSI Driver
+      command: kubectl apply -k "github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernetes/overlays/stable/ecr/?ref=master"
+      register: output
+      become: no
+
+    - name: Print output
+      debug:
+        msg: "{{ output.stdout }}"
+      become: no
+
+    - name: Uninstall MongoDB using Helm
+      command:
+        cmd: "helm uninstall mongodb"
+      ignore_errors: true
+      become: no
+
+    - name: Add Bitnami Helm repo
+      command: helm repo add bitnami https://charts.bitnami.com/bitnami
+      become: no
+
+    - name: Update Helm repo
+      command: helm repo update
+      become: no
+
+    - name: Install MongoDB using Helm
+      command:
+        helm install mongodb bitnami/mongodb -f /tmp/storageclass-custom-values.yaml
+      become: no
+
+    - name: Ensure MongoDB repo is present
+      copy:
+        dest: /etc/yum.repos.d/mongodb-org-6.0.repo
+        content: |
+          [mongodb-org-6.0]
+          name=MongoDB Repository
+          baseurl=https://repo.mongodb.org/yum/amazon/2013.03/mongodb-org/6.0/x86_64/
+          gpgcheck=1
+          enabled=1
+          gpgkey=https://www.mongodb.org/static/pgp/server-6.0.asc
+        mode: '0644'
+      notify:
+        - Update yum
+
+    - name: Install mongosh
+      yum:
+        name: mongodb-mongosh
+        state: present
+
+    - name: Ensure logrotate is installed
+      yum:
+        name: logrotate
+        state: present
+
+    - name: Start kubectl port-forward as a daemon and log the output
+      shell: |
+        nohup kubectl port-forward svc/mongodb 27017:27017 >> /tmp/kubectl_port_forward.log 2>&1 &
+        disown
+      args:
+        executable: /bin/bash
+      become: no
+
+    - name: Configure log rotation for kubectl port-forward log
+      copy:
+        dest: /etc/logrotate.d/kubectl_port_forward
+        content: |
+          /tmp/kubectl_port_forward.log {
+            daily
+            rotate 7
+            compress
+            delaycompress
+            missingok
+            notifempty
+            create 0644 ec2-user ec2-user
+          }
+
+    - name: Install Python packages from requirements.txt
+      pip:
+        requirements: /tmp/requirements.txt
+        executable: pip3
+      become: no
+
+  handlers:
+    - name: Update yum
+      command: yum update -y
