@@ -1,16 +1,8 @@
-# Ignore all hidden files and directories
 .*
-
-# But do not ignore .gitignore
 !.gitignore
-
-# Ignore swap files from vi/vim
 .*.swp
 .*.swo
-
-# Ignore .bkp files
 *.bkp
-
-# Ignore bkp directory
 /bkp/
-
+*.out
+*.pem
