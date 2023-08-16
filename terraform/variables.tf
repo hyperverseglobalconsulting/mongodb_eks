@@ -16,12 +16,6 @@ variable "availability_zones" {
   default     = ["us-east-2a", "us-east-2b", "us-east-2c"]
 }
 
-variable "demo_server_ip" {
-  description = "The IP address of the demo server"
-  type        = string
-  default     = "3.131.245.27"
-}
-
 variable "key_name" {
   description = "The name of the key pair"
   type        = string
@@ -64,12 +58,7 @@ variable "server_name" {
   default     = "bastion-server"  # Name of the server
 }
 
-variable "aws_access_key" {
-  description = "AWS Access Key"
-  type        = string
-}
-
-variable "aws_secret_key" {
-  description = "AWS Secret Key"
-  type        = string
+variable "sudo_password" {
+  description = "The sudo password"
+  sensitive   = true
 }

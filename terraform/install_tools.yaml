@@ -160,15 +160,36 @@
         cmd: "helm repo update"
       become: no
 
-    - name: Install AWS EBS CSI Driver
-      command: kubectl apply -k "github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernetes/overlays/stable/ecr/?ref=master"
-      register: output
+#    - name: Install AWS EBS CSI Driver
+#      command: kubectl apply -k "github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernetes/overlays/stable/ecr/?ref=master"
+#      register: output
+#      become: no
+
+    - name: Add AWS EBS CSI Driver Helm repository
+      command: helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
+      become: no
+      register: repo_added
+      failed_when: "'already exists' not in repo_added.stderr and repo_added.rc != 0"
+
+    - name: Update Helm repositories
+      command: helm repo update
       become: no
 
-    - name: Print output
-      debug:
-        msg: "{{ output.stdout }}"
+    - name: Check if Helm chart for AWS EBS CSI Driver is installed
+      command: helm list -f aws-ebs-csi-driver
+      register: helm_list
+      ignore_errors: true
       become: no
+
+    - name: Install AWS EBS CSI Driver using Helm
+      command: helm install aws-ebs-csi-driver aws-ebs-csi-driver/aws-ebs-csi-driver -n kube-system
+      ignore_errors: true
+      become: no
+
+#    - name: Print output
+#      debug:
+#        msg: "{{ output.stdout }}"
+#      become: no
 
     - name: Uninstall MongoDB using Helm
       command:

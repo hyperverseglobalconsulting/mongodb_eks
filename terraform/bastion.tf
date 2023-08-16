@@ -58,13 +58,17 @@ data "aws_ami" "amazon_2" {
     owners  = ["amazon"]
 }
 
+data "http" "my_ip" {
+  url = "http://ipv4.icanhazip.com"
+}
+
 resource "aws_security_group" "sg" {
     vpc_id      = aws_vpc.k8s.id
     name        = "public_subnet"
     description = "Connect Public Subnet"
 
     ingress {
-        cidr_blocks = ["${var.demo_server_ip}/32"]
+        cidr_blocks = ["${trimspace(data.http.my_ip.response_body)}/32"]
         from_port   = 22
         to_port     = 22
         protocol    = "tcp"
@@ -103,7 +107,7 @@ resource "null_resource" "change_key_permissions" {
   depends_on = [local_file.private_key]
 
   provisioner "local-exec" {
-    command = "sudo chmod 400 ${path.module}/${var.key_name} && sleep 10"
+    command = "echo ${var.sudo_password} | sudo -S chmod 400 ${path.module}/${var.key_name} && sleep 10"
   }
 }
 
@@ -135,12 +139,15 @@ resource "aws_instance" "bastion" {
 
     provisioner "local-exec" {
         command = <<EOT
-        ansible-playbook -vvv -i ${aws_instance.bastion.public_ip}, -u ec2-user --private-key=${var.key_name} -e 'ansible_ssh_common_args="-o StrictHostKeyChecking=no"' "${path.module}/install_tools.yaml" \
-        --extra-vars "EKS_CLUSTER_ARN='${aws_eks_cluster.cluster.arn}'" \
-        --extra-vars "AWS_ACCESS_KEY_ID='${var.aws_access_key}'" \
-        --extra-vars "AWS_SECRET_ACCESS_KEY='${var.aws_secret_key}'" \
-        --extra-vars "AWS_REGION='${var.aws_region}'" \
-        --extra-vars "KEY_NAME='${var.key_name}'"
+            export AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id --profile eksuser)
+            export AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key --profile eksuser)
+            export AWS_DEFAULT_REGION=$(aws configure get region --profile eksuser)
+            ansible-playbook -vvv -i ${aws_instance.bastion.public_ip}, -u ec2-user --private-key=${var.key_name} -e 'ansible_ssh_common_args="-o StrictHostKeyChecking=no"' "${path.module}/install_tools.yaml" \
+            --extra-vars "EKS_CLUSTER_ARN='${aws_eks_cluster.cluster.arn}'" \
+            --extra-vars "AWS_ACCESS_KEY_ID='$AWS_ACCESS_KEY_ID'" \
+            --extra-vars "AWS_SECRET_ACCESS_KEY='$AWS_SECRET_ACCESS_KEY'" \
+            --extra-vars "AWS_REGION='$AWS_DEFAULT_REGION'" \
+            --extra-vars "KEY_NAME='${var.key_name}'"
         EOT
     }
 
