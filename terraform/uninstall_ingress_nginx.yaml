@@ -1,0 +1,70 @@
+---
+- hosts: all
+  tasks:
+    - name: Get the ELB name associated with ingress-nginx
+      command: kubectl get svc -n ingress-nginx ingress-nginx-controller -o=jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+      become: yes
+      become_user: ec2-user
+      register: elb_hostname_result
+      ignore_errors: true
+
+    - name: Uninstall ingress-nginx Helm release
+      command: helm uninstall ingress-nginx -n ingress-nginx
+      become: yes
+      become_user: ec2-user
+      ignore_errors: true
+
+    - set_fact:
+        elb_name: "{{ elb_hostname_result.stdout.split('-')[0] }}"
+    
+    - name: Debug - Print ELB name
+      debug:
+        var: elb_name
+
+    - name: Wait for the ELB to be deleted
+      command: >
+        aws elb describe-load-balancers --load-balancer-names "{{ elb_name }}"
+      register: elb_status
+      failed_when: false
+      retries: 10
+      delay: 30
+      until: "'LoadBalancerNotFound' in elb_status.stderr"
+      when: elb_name != ""  # <- This ensures the task runs only if elb_name is not empty
+
+    - name: List all security groups associated with the ELB in VPC
+      amazon.aws.ec2_group_info:
+        filters:
+          vpc-id: "{{ vpc_id }}"
+      register: vpc_sgs
+
+    - name: Debug - Print vpc_sgs
+      debug:
+        var: vpc_sgs
+
+    - name: Identify the ingress-nginx security group
+      set_fact:
+        elb_sg_to_delete: "{{ item.group_id }}"
+      with_items: "{{ vpc_sgs.security_groups }}"
+      when: "'k8s-elb-' in item.group_name"
+
+    - name: Describe network interfaces associated with the security group
+      command: "aws ec2 describe-network-interfaces --filters Name=group-id,Values={{ elb_sg_to_delete }}"
+      register: network_interfaces_result
+      ignore_errors: true
+      changed_when: false  # This ensures the task doesn't report a changed status
+      retries: 10  # number of retries before giving up
+      delay: 30  # delay (in seconds) between retries
+      until: network_interfaces_result.stdout == "" or (network_interfaces_result.stdout | from_json).NetworkInterfaces | length == 0
+      when: elb_sg_to_delete is defined
+
+    - name: Debug - Print network interfaces
+      debug:
+        var: network_interfaces_result.stdout
+      when: elb_sg_to_delete is defined and network_interfaces_result.stdout != ""
+
+    - name: Delete the identified security group
+      amazon.aws.ec2_group:
+        group_id: "{{ elb_sg_to_delete }}"
+        state: absent
+      when: elb_sg_to_delete is defined
+

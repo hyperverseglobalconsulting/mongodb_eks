@@ -82,6 +82,11 @@
         cmd: "helm repo add stable https://charts.helm.sh/stable"
       become: no
 
+#    - name: Add ingress-nginx Helm repository
+#      command:
+#        cmd: "helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx"
+#      become: no
+
     - name: Update Helm repositories
       command:
         cmd: "helm repo update"
@@ -123,31 +128,57 @@
         state: latest
       become: yes
 
+    - name: Clone specific branch of the repository
+      git:
+        repo: 'https://github.com/hyperverseglobalconsulting/mongodb_eks.git'
+        dest: '~/mongodb_eks'
+        version: main
+        depth: 1 # Shallow clone, gets only the latest revision
+      become: no
+
     - name: Copy files to remote server's /tmp directory
       copy:
         src: "{{ item }}"
         dest: "/tmp/{{ item }}"
       with_items:
-        - ebs-pvc.yaml
-        - ebs-storage-class.yaml
         - storageclass-custom-values.yaml
         - mongodb_sanity_test.py
         - requirements.txt
       become: no
 
+#    - name: Create ingress-nginx namespace
+#      command:
+#        cmd: kubectl create namespace ingress-nginx
+#      ignore_errors: yes
+#      become: no
+#
+#    - name: Install ingress-nginx using Helm in ingress-nginx namespace
+#      command:
+#        cmd: helm install ingress-nginx ingress-nginx/ingress-nginx --namespace ingress-nginx
+#      become: no
+#
+#    - name: Get the ELB name associated with ingress-nginx
+#      command: kubectl get svc -n ingress-nginx ingress-nginx-controller -o=jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+#      become_user: ec2-user
+#      register: elb_hostname_result
+#      until: elb_hostname_result.stdout != ""
+#      retries: 30 # retry up to 30 times
+#      delay: 10   # wait 10 seconds between each retry
+#      become: no
+
     - name: Delete local-storage related resources if they exist
       command: kubectl delete -f {{ item }}
       with_items:
-        - /tmp/ebs-pvc.yaml
-        - /tmp/ebs-storage-class.yaml
+        - ~/mongodb_eks/terraform/ebs-pvc.yaml
+        - ~/mongodb_eks/terraform/ebs-storage-class.yaml
       ignore_errors: yes
       become: no
 
     - name: Apply local-storage resources and ServiceAccount
       command: kubectl apply -f {{ item }}
       with_items:
-        - /tmp/ebs-pvc.yaml
-        - /tmp/ebs-storage-class.yaml
+        - ~/mongodb_eks/terraform/ebs-pvc.yaml
+        - ~/mongodb_eks/terraform/ebs-storage-class.yaml
       become: no
 
     - name: Add EKS Helm Repository
@@ -159,11 +190,6 @@
       command:
         cmd: "helm repo update"
       become: no
-
-#    - name: Install AWS EBS CSI Driver
-#      command: kubectl apply -k "github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernetes/overlays/stable/ecr/?ref=master"
-#      register: output
-#      become: no
 
     - name: Add AWS EBS CSI Driver Helm repository
       command: helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
@@ -258,7 +284,7 @@
 
     - name: Install Python packages from requirements.txt
       pip:
-        requirements: /tmp/requirements.txt
+        requirements: ~/mongodb_eks/terraform/requirements.txt
         executable: pip3
       become: no
 
