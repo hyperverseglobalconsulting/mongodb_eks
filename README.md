@@ -10,8 +10,8 @@ This project automates the deployment of MongoDB on an AWS EKS cluster. By utili
 - Access to AWS S3 bucket for Terraform state management
 
 ## Setup Instructions
-### 1. Infrastructure Setup:
-- #### Modify Bucket Names:
+### 1. Infrastructure Setup
+- #### Modify Bucket Names
 Edit the bucket names specified in main.tf and variables.tf to fit your desired AWS environment.
 
 - #### Initialize Terraform:
@@ -20,7 +20,9 @@ Navigate to the project's root directory and run:
 
 - #### Apply Terraform Configuration
 Deploy the AWS resources:
-`terraform apply`
+`./apply_infrastructure.sh`
+
+Applying infrafstructure using the script also forwards port to localhost that allows DB client connection.
 
 - #### Retrieve Bastion Host IP
 Once Terraform has finished provisioning the resources, get the public IP of the bastion instance:
@@ -29,9 +31,9 @@ Once Terraform has finished provisioning the resources, get the public IP of the
 - #### Accessing Key Pair
 Terraform script will create a key pair and save the private key as `mongodb-in-eks.pem` in the current directory. Ensure you keep this key secure.
 
-### 2. Accessing MongoDB:
+### 2. Accessing MongoDB
 
--   **Via `mongosh`**:
+-   **Via `mongosh`**
     
     -   SSH into the bastion host:
 `ssh -i mongodb-in-eks.pem ec2-user@$(terraform output bastion_public_ip)`
@@ -40,7 +42,7 @@ Terraform script will create a key pair and save the private key as `mongodb-in-
     `password=$(kubectl get secret mongodb -o jsonpath='{.data.mongodb-root-password}' | base64 --decode)`    
     - Access the MongoDB instance using the extracted password:
     `mongosh --host localhost --port 27017 --username root --password $password --authenticationDatabase admin`
-- **Via `pymongo`**:
+- **Via `pymongo`**
 
 Make sure your Python script is equipped with the `get_mongodb_password` function to pull the root password from Kubernetes secret:
 
@@ -67,6 +69,20 @@ Use the extracted password to establish a connection:
                               authSource='admin')
     db = mongo_client[<dbname>]
     
+- **Via DB Client such as `Studio 3T`**
+
+MongoDB password is additional saved in AWS secretmanager and can be retrieved using the following AWS CLI command:
+
+    aws secretsmanager get-secret-value --secret-id MongoDBPassword --region <region> | jq -r .SecretString
+
+The script for applyting terraform script also does port-forwarding to allow connection to localhost. You can use the following URL to connect to the MongoDB server:
+
+    mongodb://<credentials>@localhost:27017/?directConnection=true&serverSelectionTimeoutMS=2000&authSource=admin&appName=mongosh+1.10.5
+
+### 3. Destroy infrastructure
+Destroy the AWS resources:
+`./destroy_infrastructure.sh`
+
   ## Conclusion
 
 This automated setup aids in deploying a MongoDB instance on an AWS EKS cluster efficiently. The integration of Terraform and Ansible ensures that infrastructure and configuration management are handled seamlessly.
