@@ -142,8 +142,6 @@
         dest: "/tmp/{{ item }}"
       with_items:
         - storageclass-custom-values.yaml
-        - mongodb_sanity_test.py
-        - requirements.txt
       become: no
 
 #    - name: Create ingress-nginx namespace
@@ -233,7 +231,7 @@
 
     - name: Install MongoDB using Helm
       command:
-        helm install mongodb bitnami/mongodb -f /tmp/storageclass-custom-values.yaml
+        helm install mongodb bitnami/mongodb -f ~/mongodb_eks/terraform/storageclass-custom-values.yaml
       become: no
 
     - name: Ensure MongoDB repo is present
@@ -287,6 +285,24 @@
         requirements: ~/mongodb_eks/terraform/requirements.txt
         executable: pip3
       become: no
+
+    - name: Retrieve MongoDB password from Kubernetes
+      shell: kubectl get secret mongodb -o jsonpath='{.data.mongodb-root-password}' | base64 --decode
+      register: mongo_password_result
+      changed_when: false
+      become: no
+
+    - name: Store the password in AWS Secrets Manager
+      command: >
+        aws secretsmanager create-secret --name MongoDBPassword --description "MongoDB Root Password" --secret-string "{{ mongo_password_result.stdout }}"
+      register: aws_secrets_result
+      failed_when: "'ResourceExistsException' in aws_secrets_result.stderr and 'already exists' in aws_secrets_result.stderr"
+      changed_when: "'ResourceExistsException' not in aws_secrets_result.stderr"
+      become: no
+
+    - debug:
+        msg:
+          - "AWS Secret Manager secret string holding the mongodb password is 'MongoDBPassword'"
 
   handlers:
     - name: Update yum
