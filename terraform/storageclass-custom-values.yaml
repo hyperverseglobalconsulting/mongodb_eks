@@ -1,4 +1,5 @@
 mongodb:
+  enableIAMRole: true
   persistence:
     enabled: true
     storageClass: "ebs-sc"
