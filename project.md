@@ -147,4 +147,9 @@ sequenceDiagram
 - **StorageClass** (`ebs-storage-class.yaml`): Dynamically provisions EBS volumes.  
 - **Security**:  
   - Kubernetes Secrets for MongoDB passwords  
-  - Network policies to restrict pod communication  
+  - Network policies to restrict pod communication
+
+### 3. Access Methods  
+- **Bastion Host SSH**:  
+  ```bash
+  ssh -i mongodb-in-eks.pem ec2-user@$(terraform output bastion_public_ip)
