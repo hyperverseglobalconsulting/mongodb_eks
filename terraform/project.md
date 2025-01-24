@@ -26,8 +26,33 @@ This project automates the deployment of a highly available MongoDB instance on 
 ---
 
 ## Architecture Overview  
-### High-Level Infrastructure Diagram  
-![Architecture Diagram](assets/architecture-diagram.png) *（Replace with actual diagram）*  
+### High-Level Infrastructure Diagram 
+```mermaid
+%% MongoDB on AWS EKS Architecture
+graph TD
+    subgraph AWS_VPC[VPC]
+        subgraph Public_Subnet[Public Subnet]
+            Bastion[EC2 Bastion Host]
+            IGW[Internet Gateway]
+        end
+        
+        subgraph Private_Subnet[Private Subnet]
+            EKS_Cluster[[EKS Cluster]]
+            EKS_Worker_Node[Worker Node]
+            MongoDB_Pod[(MongoDB Pod)]
+            EBS_Volume[(EBS Volume)]
+        end
+        
+        Bastion -->|SSH & Port Forwarding| EKS_Cluster
+        EKS_Cluster -->|Persistent Storage| EBS_Volume
+        IGW -->|Internet Access| Public_Subnet
+    end
+    
+    SecretsManager[(AWS Secrets Manager)] -->|Retrieve Credentials| Bastion
+    SecretsManager -->|Store Password| EKS_Cluster
+    User[User] -->|SSH Access| Bastion
+    User -->|mongosh/pymongo| MongoDB_Pod
+```
 
 #### Components:  
 1. **AWS EKS Cluster**: Hosts MongoDB pods in a managed Kubernetes environment.  
