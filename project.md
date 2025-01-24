@@ -70,58 +70,6 @@ graph TD
 4. **AWS Secrets Manager**: Stores and retrieves MongoDB root credentials securely.  
 5. **VPC & Subnets**: Isolated network with public/private subnets for security.  
 
-### Deployment Workflow Diagram  
-``` mermaid
-%% MongoDB on AWS EKS Deployment Workflow
-sequenceDiagram
-    participant User
-    participant Terraform
-    participant AWS
-    participant Ansible
-    participant Kubernetes
-    participant Bastion
-    participant MongoDB
-
-    User->>Terraform: Run apply.infrastructure.sh
-    activate Terraform
-        Terraform->>AWS: 1. Create VPC/Subnets
-        Terraform->>AWS: 2. Provision EKS Cluster
-        Terraform->>AWS: 3. Deploy Bastion Host
-        Terraform->>AWS: 4. Create EBS Volumes (3x5GB)
-        Terraform->>AWS: 5. Store KeyPair in S3
-        AWS-->>Terraform: Infrastructure Ready
-    deactivate Terraform
-
-    User->>Ansible: Execute install_tools.yaml
-    activate Ansible
-        Ansible->>Bastion: 6. Install Tools: kubectl/helm, AWS CLI, Docker
-        Ansible->>Kubernetes: 7. Deploy EBS CSI Driver
-        Ansible->>Kubernetes: 8. Create StorageClass/PVC
-        Ansible->>Kubernetes: 9. Install MongoDB via Helm
-        Ansible->>Kubernetes: 10. Configure Port Forwarding
-        Ansible->>AWS: 11. Store Password in Secrets Manager
-        Kubernetes-->>Ansible: MongoDB Operational
-    deactivate Ansible
-
-    User->>Bastion: 12. SSH Access
-    activate Bastion
-        Bastion->>Kubernetes: 13. Port Forward 27017→localhost
-        Bastion-->>User: Tunnel Established
-    deactivate Bastion
-
-    loop Access Methods
-        User->>MongoDB: 14a. Connect via mongosh
-        User->>MongoDB: 14b. Connect via pymongo
-        User->>MongoDB: 14c. Use Studio3T
-    end
-
-    User->>Terraform: Run destroy.infrastructure.sh
-    activate Terraform
-        Terraform->>AWS: 15. Terminate All Resources
-        AWS-->>Terraform: Clean State
-    deactivate Terraform
-```
-
 1. **Terraform Provisions Infrastructure**:  
    - EKS Cluster  
    - Bastion Host  
@@ -180,3 +128,56 @@ graph TD
 - **Bastion Host SSH**:  
   ```bash
   ssh -i mongodb-in-eks.pem ec2-user@$(terraform output bastion_public_ip)
+
+## 4. Workflow  
+### End-to-End Deployment Process  
+The workflow follows a strict Infrastructure-as-Code (IaC) sequence:  
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Terraform
+    participant AWS
+    participant Ansible
+    participant Kubernetes
+    participant Bastion
+    participant MongoDB
+
+    User->>Terraform: Run apply.infrastructure.sh
+    activate Terraform
+        Terraform->>AWS: 1. Create VPC/Subnets
+        Terraform->>AWS: 2. Provision EKS Cluster
+        Terraform->>AWS: 3. Deploy Bastion Host
+        Terraform->>AWS: 4. Create EBS Volumes (3x5GB)
+        Terraform->>AWS: 5. Store KeyPair in S3
+        AWS-->>Terraform: Infrastructure Ready
+    deactivate Terraform
+
+    User->>Ansible: Execute install_tools.yaml
+    activate Ansible
+        Ansible->>Bastion: 6. Install Tools: kubectl/helm, AWS CLI, Docker
+        Ansible->>Kubernetes: 7. Deploy EBS CSI Driver
+        Ansible->>Kubernetes: 8. Create StorageClass/PVC
+        Ansible->>Kubernetes: 9. Install MongoDB via Helm
+        Ansible->>Kubernetes: 10. Configure Port Forwarding
+        Ansible->>AWS: 11. Store Password in Secrets Manager
+        Kubernetes-->>Ansible: MongoDB Operational
+    deactivate Ansible
+
+    User->>Bastion: 12. SSH Access
+    activate Bastion
+        Bastion->>Kubernetes: 13. Port Forward 27017→localhost
+        Bastion-->>User: Tunnel Established
+    deactivate Bastion
+
+    loop Access Methods
+        User->>MongoDB: 14a. Connect via mongosh
+        User->>MongoDB: 14b. Connect via pymongo
+        User->>MongoDB: 14c. Use Studio3T
+    end
+
+    User->>Terraform: Run destroy.infrastructure.sh
+    activate Terraform
+        Terraform->>AWS: 15. Terminate All Resources
+        AWS-->>Terraform: Clean State
+    deactivate Terraform
