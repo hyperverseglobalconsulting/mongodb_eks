@@ -28,30 +28,39 @@ This project automates the deployment of a highly available MongoDB instance on 
 ## Architecture Overview  
 ### High-Level Infrastructure Diagram 
 ```mermaid
-%% MongoDB on AWS EKS Architecture
+%% Updated MongoDB on AWS EKS Architecture
 graph TD
-    subgraph AWS_VPC[VPC]
+    subgraph AWS_VPC[VPC - 10.0.0.0/16]
         subgraph Public_Subnet[Public Subnet]
             Bastion[EC2 Bastion Host]
             IGW[Internet Gateway]
         end
         
-        subgraph Private_Subnet[Private Subnet]
-            EKS_Cluster[[EKS Cluster]]
-            EKS_Worker_Node[Worker Node]
+        subgraph EKS_Public_Subnets[EKS Public Subnets]
+            EKS_Control_Plane[[EKS Control Plane]]
+            Node_Group[Worker Node Group]
             MongoDB_Pod[(MongoDB Pod)]
-            EBS_Volume[(EBS Volume)]
+            EBS_CSI_Driver[AWS EBS CSI Driver]
         end
         
-        Bastion -->|SSH & Port Forwarding| EKS_Cluster
-        EKS_Cluster -->|Persistent Storage| EBS_Volume
-        IGW -->|Internet Access| Public_Subnet
+        Bastion -->|Ansible Provisioning| Node_Group
+        EBS_CSI_Driver -->|Dynamic Provisioning| EBS_Volumes[(EBS Volumes)]
     end
     
-    SecretsManager[(AWS Secrets Manager)] -->|Retrieve Credentials| Bastion
-    SecretsManager -->|Store Password| EKS_Cluster
-    User[User] -->|SSH Access| Bastion
+    SecretsManager[(AWS Secrets Manager)] -->|Store/Retrieve| MongoDB_Pod
+    User[User] -->|SSH| Bastion
     User -->|mongosh/pymongo| MongoDB_Pod
+    Node_Group -->|IAM Roles| EKS_Policies[EKS Policies]
+    
+    classDef aws fill:#FF9900,color:black;
+    classDef k8s fill#326ce5,color:white;
+    classDef secret fill#795da3,color:white;
+    classDef storage fill#21b0cb,color:black;
+    
+    class Bastion,IGW,EBS_Volumes aws;
+    class EKS_Control_Plane,Node_Group,MongoDB_Pod,EBS_CSI_Driver k8s;
+    class SecretsManager secret;
+    class EBS_Volumes storage;
 ```
 
 #### Components:  
