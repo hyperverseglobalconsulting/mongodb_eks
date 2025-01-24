@@ -203,7 +203,7 @@ sequenceDiagram
 
 ---
 
-## 5. Accessing MongoDB  
+## Accessing MongoDB  
 ### Connection Methods
 
 #### 1. Direct Shell Access (mongosh)
@@ -239,4 +239,85 @@ client = MongoClient(
     password=get_mongodb_password(),
     authSource='admin'
 )
+```
+#### 3. GUI Client (Studio 3T/Robo3T)
+``` bash
+# Retrieve password from AWS Secrets Manager
+MONGODB_PWD=$(aws secretsmanager get-secret-value \
+  --secret-id MongoDBPassword \
+  --region us-east-2 \
+  --query SecretString --output text)
+
+# Connection string:
+mongodb://root:${MONGODB_PWD}@localhost:27017/?directConnection=true&authSource=admin
+```
+## Repository Structure
+### Code Organization
+```mermaid
+graph TD
+    ROOT[.] --> TF[terraform/]
+    ROOT --> K8S[kubernetes/]
+    ROOT --> SCRIPTS[scripts/]
+    ROOT --> ANSIBLE[ansible/]
+    ROOT --> DOCS[docs/]
+    
+    TF --> main.tf
+    TF --> eks.tf
+    TF --> bastion.tf
+    TF --> ebs.tf
+    TF --> variables.tf
+    
+    K8S --> ebs-storage-class.yaml
+    K8S --> ebs-pvc.yaml
+    
+    SCRIPTS --> apply.infrastructure.sh
+    SCRIPTS --> destroy.infrastructure.sh
+    SCRIPTS --> rebuild_bastion_server.sh
+    
+    ANSIBLE --> install_tools.yaml
+    ANSIBLE --> uninstall_ingress_nginx.yaml
+    
+    DOCS --> project.md
+    DOCS --> architecture-diagram.png
+```
+### Key Components
+| Directory       | Purpose                                  |
+|-----------------|------------------------------------------|
+| `terraform/`    | AWS infrastructure definitions          |
+| `kubernetes/`   | Storage manifests for EBS integration   |
+| `scripts/`      | One-click apply/destroy automation      |
+| `ansible/`      | Bastion host configuration playbooks    |
+| `docs/`         | Architecture diagrams & documentation   |
+
+---
+
+## Conclusion
+### Implementation Highlights
+```markdown
+- **Infrastructure as Code**: Complete AWS environment provisioned through Terraform  
+- **Secure Access**: Bastion host with IP-restricted SSH + IAM role-based access  
+- **Persistent Storage**: EBS volumes dynamically provisioned via CSI driver  
+- **Automated Secrets**: Kubernetes Secrets ↔ AWS Secrets Manager synchronization
+```
+### Future Improvements
+```markdown
+1. **High Availability**  
+   - Multi-AZ deployment for MongoDB replica sets  
+   - EKS node auto-scaling policies  
+
+2. **Monitoring**  
+   - CloudWatch integration for MongoDB metrics  
+   - Prometheus stack for Kubernetes monitoring  
+
+3. **CI/CD Pipeline**  
+   - Automated testing with `mongodb_sanity_test.py`  
+   - GitOps workflow using ArgoCD  
+
+4. **Security Enhancements**  
+   - Network policies for pod communication  
+   - IAM role for service accounts (IRSA)
+```
+### Final Note
+``` markdown
+This project demonstrates a production-ready pattern for stateful workloads on Kubernetes while maintaining infrastructure reproducibility and security best practices.
 ```
