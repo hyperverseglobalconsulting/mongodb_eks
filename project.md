@@ -133,6 +133,33 @@ sequenceDiagram
    - Port forwarding via bastion  
    - Secrets retrieval from AWS Secrets Manager  
 
+### Repository Structure Diagram
+```mermaid
+%% File Tree
+graph TD
+    Root[.] --> Terraform
+    Root --> Kubernetes
+    Root --> Scripts
+    Root --> Ansible
+    Root --> Docs
+    
+    Terraform --> main.tf
+    Terraform --> eks.tf
+    Terraform --> bastion.tf
+    Terraform --> ebs.tf
+    
+    Kubernetes --> ebs-storage-class.yaml
+    Kubernetes --> ebs-pvc.yaml
+    
+    Scripts --> apply.infrastructure.sh
+    Scripts --> destroy.infrastructure.sh
+    
+    Ansible --> install_tools.yaml
+    
+    Docs --> project.md
+    Docs --> architecture-diagram.png
+```
+
 ---
 
 ## Detailed Components  
