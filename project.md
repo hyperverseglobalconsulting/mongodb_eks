@@ -129,7 +129,7 @@ graph TD
   ```bash
   ssh -i mongodb-in-eks.pem ec2-user@$(terraform output bastion_public_ip)
 
-## 4. Workflow  
+## Workflow  
 ### End-to-End Deployment Process  
 The workflow follows a strict Infrastructure-as-Code (IaC) sequence:  
 
@@ -181,3 +181,62 @@ sequenceDiagram
         Terraform->>AWS: 15. Terminate All Resources
         AWS-->>Terraform: Clean State
     deactivate Terraform
+```
+  
+### Phases Breakdown
+
+#### Infrastructure Provisioning
+- Creates VPC with public subnets (CIDR: 10.0.0.0/16)
+- Deploys EKS cluster with 3 t3.small worker nodes
+- Provisions bastion host with strict IP-based SSH access
+- Creates 3x5GB GP2 EBS volumes
+
+#### Kubernetes Configuration
+- Installs AWS EBS CSI Driver v1.26.4
+- Configures StorageClass with `volumeBindingMode: WaitForFirstConsumer`
+- Deploys MongoDB using Bitnami Helm chart v13.7.0
+
+#### Access Automation
+- Auto-generates MongoDB root password (base64 encoded)
+- Syncs credentials to AWS Secrets Manager
+- Persistent port forwarding via `nohup` daemon
+
+---
+
+## 5. Accessing MongoDB  
+### Connection Methods
+
+#### 1. Direct Shell Access (mongosh)
+```bash
+# SSH to bastion
+ssh -i mongodb-in-eks.pem ec2-user@$(terraform output bastion_public_ip)
+
+# Decode password from Kubernetes secret
+MONGODB_PWD=$(kubectl get secret mongodb -o jsonpath='{.data.mongodb-root-password}' | base64 -d)
+
+# Connect using mongosh
+mongosh "mongodb://root:${MONGODB_PWD}@localhost:27017/admin?authSource=admin"
+```
+
+### Connection Methods
+
+#### 2. Programmatic Access (Python)
+```python
+from pymongo import MongoClient
+from kubernetes import config, client
+import base64
+
+def get_mongodb_password():
+    config.load_kube_config()
+    v1 = client.CoreV1Api()
+    secret = v1.read_namespaced_secret("mongodb", "default")
+    return base64.b64decode(secret.data["mongodb-root-password"]).decode('utf-8')
+
+client = MongoClient(
+    host='localhost',
+    port=27017,
+    username='root',
+    password=get_mongodb_password(),
+    authSource='admin'
+)
+```
