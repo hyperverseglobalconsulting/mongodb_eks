@@ -79,6 +79,8 @@ sequenceDiagram
     participant AWS
     participant Ansible
     participant Kubernetes
+    participant Bastion
+    participant MongoDB
 
     User->>Terraform: Run apply.infrastructure.sh
     activate Terraform
@@ -92,10 +94,7 @@ sequenceDiagram
 
     User->>Ansible: Execute install_tools.yaml
     activate Ansible
-        Ansible->>Bastion: 6. Install Tools:
-            - kubectl/helm
-            - AWS CLI
-            - Docker
+        Ansible->>Bastion: 6. Install Tools: kubectl/helm, AWS CLI, Docker
         Ansible->>Kubernetes: 7. Deploy EBS CSI Driver
         Ansible->>Kubernetes: 8. Create StorageClass/PVC
         Ansible->>Kubernetes: 9. Install MongoDB via Helm
